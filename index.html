@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Quno!</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: url('https://www.freeiconspng.com/uploads/wood-png-20.jpg') center/cover fixed no-repeat;
+      overflow: hidden;
+      padding-top: 180px;
+      box-sizing: border-box;
+    }
+    #curtains { position: fixed; top: 0; left: 0; width: 100%; z-index: 5; pointer-events: none; }
+    #curtains img { width: 100%; }
+    h1 { margin: 0 0 10px; color: #fff; text-align: center; font-size: 52px; text-shadow: 2px 2px 3px #000; z-index: 2; position: relative; }
+    #opponentArea { color: #fff; text-align: center; font-weight: bold; margin-top: 10px; z-index: 2; position: relative; }
+    #opponentCards { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+    #pile { text-align: center; margin: 30px auto 10px; position: relative; z-index: 4; }
+    #pile .card { margin: 0 auto; }
+    #status { color: #fff; text-align: center; font-size: 18px; margin-bottom: 10px; }
+    #drawBtn { display: block; margin: 0 auto 20px; padding: 10px 25px; font-size: 18px; background: #222; color: #fff; border: 2px solid #fff; cursor: pointer; z-index: 2; position: relative; }
+    #yourHand { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; justify-content: center; z-index: 2; }
+    .card {
+      width: 80px;
+      height: 110px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: bold;
+      font-size: 46px;
+      box-shadow: 2px 2px 8px rgba(0,0,0,.5);
+      border: 2px solid #000;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.1s;
+      user-select: none;
+    }
+    .card.small-text {
+      font-size: 40px;
+      letter-spacing: -3px;
+    }
+    .Red    { background: crimson; }
+    .Green  { background: seagreen; }
+    .Blue   { background: royalblue; }
+    .Yellow { background: goldenrod; }
+    .Wild   { background: #000; }
+    #disclaimer {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      color: #fff;
+      text-align: center;
+      font-size: 13px;
+      background: rgba(0,0,0,.5);
+      padding: 12px 20px 5px;
+      text-shadow: 1px 1px 2px #000;
+      z-index: 99;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="curtains"><img src="https://purepng.com/public/uploads/large/purepng.com-curtainscurtainsdrapepiece-of-clothcovering-1701527923168o0ghd.png" alt="Curtains"></div>
+  <h1 id="title">Quno!</h1>
+  <div id="opponentArea">Opponent<div id="opponentCards"></div></div>
+  <div id="pile"></div>
+  <div id="status">Loading game...</div>
+  <button id="drawBtn" onclick="drawCard()">Draw Card</button>
+  <div id="yourHand"></div>
+  <div id="disclaimer">
+    Quno is a digital UNO variant shuffled exclusively with quantum randomness from ANU's QRNG — the first UNO game to harness quantum physics.<br><br>
+    Made by <strong>Jonathan</strong>
+  </div>
+  <script>
+    const COLORS = ['Red', 'Green', 'Blue', 'Yellow'];
+    const VALUES = ['0','1','2','3','4','5','6','7','8','9','⏩','↺','+2'];
+    const SPECIALS = ['Wild','Draw4','DeckSwap'];
+
+    // Icon mapping for special cards
+    const icon_map = {
+      'Draw4': '+4',
+      'DeckSwap': '⇄'
+    };
+
+    let deck = [], playerHand = [], aiHand = [], pile = [], currentColor = '', currentValue = '';
+    let skipNext = false, pendingDraw = 0;
+
+    /* ---------------- QRNG ---------------- */
+    async function fetchQuantumRandom(n) {
+      const res = await fetch(`https://qrng.anu.edu.au/API/jsonI.php?length=${n}&type=uint8`);
+      const data = await res.json();
+      if(!data || !data.data || data.data.length !== n) throw new Error('QRNG failed');
+      return data.data;
+    }
+
+    async function quantumShuffle(arr) {
+      const rand = await fetchQuantumRandom(arr.length);
+      return arr.map((v, i) => ({v, r: rand[i]})).sort((a, b) => a.r - b.r).map(o => o.v);
+    }
+
+    /* --------------- DECK BUILD --------------- */
+    function buildDeck() {
+      const d = [];
+      for(const color of COLORS) {
+        for(const v of VALUES) {
+          d.push({color, value: v});
+          if(v !== '0') d.push({color, value: v});
+        }
+      }
+      SPECIALS.forEach(v => d.push({color: 'Wild', value: v}));
+      return d;
+    }
+
+    const status = e => document.getElementById('status').textContent = e;
+
+    /* --------------- INITIALISE --------------- */
+    (async function init() {
+      try {
+        status('Shuffling with quantum randomness...');
+        deck = await quantumShuffle(buildDeck());
+      } catch (err) {
+        alert('Quantum RNG unavailable. Reload to try again.');
+        console.error(err);
+        return;
+      }
+      playerHand = deck.splice(0, 7);
+      aiHand = deck.splice(0, 7);
+      pile = [deck.pop()];
+      ({color: currentColor, value: currentValue} = pile[0]);
+      render();
+      status('Your turn!');
+    })();
+
+    /* ----------------- RENDER ----------------- */
+    function getCardDisplayValue(val) {
+      return icon_map[val] || val;
+    }
+
+    function render() {
+      const top = pile[pile.length-1];
+      document.getElementById('pile').innerHTML =
+        `<div class="card ${top.color}${['⏩','↺','+2','Draw4','DeckSwap'].includes(top.value)?' small-text':''}">${getCardDisplayValue(top.value)}</div>`;
+
+      const hand = document.getElementById('yourHand');
+      hand.innerHTML = '';
+      playerHand.forEach((c, i) => {
+        const d = document.createElement('div');
+        d.className = `card ${c.color}${['⏩','↺','+2','Draw4','DeckSwap'].includes(c.value)?' small-text':''}`;
+        d.textContent = getCardDisplayValue(c.value);
+        d.onclick = () => playerPlay(i);
+        hand.appendChild(d);
+      });
+
+      const opp = document.getElementById('opponentCards');
+      opp.innerHTML = '';
+      aiHand.forEach(() => {
+        const b = document.createElement('div');
+        b.className = 'card';
+        b.style.background = '#444';
+        b.textContent = '?';
+        opp.appendChild(b);
+      });
+    }
+
+    /* ------------- GAME HELPERS ------------- */
+    const isPlayable = c => c.color === 'Wild' || c.color === currentColor || c.value === currentValue;
+    const drawN = (hand, n) => hand.push(...deck.splice(0, Math.min(n, deck.length)));
+
+    function applyCard(card, who) {
+      pile.push(card);
+      if(card.color === 'Wild') {
+        if(who === 'player') {
+          do {
+            currentColor = prompt('Choose color: Red, Green, Blue, Yellow');
+            currentColor = currentColor ? currentColor.trim() : '';
+            currentColor = currentColor.charAt(0).toUpperCase() + currentColor.slice(1).toLowerCase();
+          } while(!['Red','Green','Blue','Yellow'].includes(currentColor));
+        } else {
+          currentColor = COLORS[Math.floor(Math.random() * 4)];
+          status(`Computer chose ${currentColor}`);
+        }
+      } else currentColor = card.color;
+      currentValue = card.value;
+      switch(card.value) {
+        case 'Draw4': pendingDraw += 4; break;
+        case '+2': pendingDraw += 2; break;
+        case '⏩': case '↺': skipNext = true; break;
+        case 'DeckSwap': [playerHand, aiHand] = who === 'player' ? [aiHand, playerHand] : [playerHand, aiHand]; break;
+      }
+    }
+
+    /* -------------- PLAYER TURN -------------- */
+    function playerPlay(idx) {
+      if(pendingDraw) { alert(`You must draw ${pendingDraw} card(s) first.`); return; }
+      const card = playerHand[idx];
+      if(!isPlayable(card)) { alert('That card cannot be played!'); return; }
+      playerHand.splice(idx, 1);
+      applyCard(card, 'player');
+      render();
+      checkWin();
+      setTimeout(aiTurn, 600);
+    }
+
+    function drawCard() {
+      const n = pendingDraw || 1;
+      if(deck.length === 0) { alert('Deck empty!'); return; }
+      drawN(playerHand, n);
+      status(pendingDraw ? `You drew ${n} card(s).` : 'You drew a card.');
+      pendingDraw = 0;
+      render();
+      if(n === 1) setTimeout(aiTurn, 600);
+    }
+
+    /* --------------- AI TURN --------------- */
+    function aiTurn() {
+      if(skipNext) { skipNext = false; status('Computer skipped its turn.'); return; }
+      if(pendingDraw) {
+        const stack = aiHand.find(c => ['+2','Draw4'].includes(c.value) && isPlayable(c));
+        if(stack) {
+          aiHand.splice(aiHand.indexOf(stack), 1);
+          applyCard(stack, 'ai');
+          render();
+          status(`Computer stacked ${getCardDisplayValue(stack.value)}.`);
+          setTimeout(aiTurn, 600);
+          return;
+        }
+        drawN(aiHand,pendingDraw);
+        status(`Computer drew ${pendingDraw} card(s).`);
+        pendingDraw = 0;
+        render();
+      }
+      const playable = aiHand.find(isPlayable);
+      if(playable) {
+        aiHand.splice(aiHand.indexOf(playable), 1);
+        applyCard(playable, 'ai');
+        render();
+        let msg = `Computer played ${getCardDisplayValue(playable.value)}`;
+        if(playable.color === 'Wild') msg += ` and chose ${currentColor}`;
+        status(msg);
+      } else {
+        if(deck.length) { aiHand.push(deck.pop()); status('Computer drew a card.'); }
+        else status('Deck empty.');
+        render();
+      }
+      checkWin();
+    }
+
+    /* ----------------- WIN CHECK ----------------- */
+    function checkWin() {
+      if(playerHand.length === 0) {
+        document.getElementById('title').textContent = 'You Win!';
+        setTimeout(() => location.reload(), 3000);
+      } else if(aiHand.length === 0) {
+        alert('Computer wins!');
+        location.reload();
+      }
+    }
+  </script>
+</body>
+</html>
