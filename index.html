@@ -90,29 +90,47 @@
     let skipNext = false, pendingDraw = 0;
 
     /* ---------------- QRNG ---------------- */
-    const AQN_URL = "https://api.quantumnumbers.anu.edu.au";
-const AQN_API_KEY = ""; // put your key here (see note below)
+    const AQN_API_KEY = ""; // <-- paste key here if you get one
+const AQN_URL = "https://api.quantumnumbers.anu.edu.au";
 
-async function fetchQuantumRandom(n) {
+async function fetchAQN(n) {
   const url = `${AQN_URL}?length=${n}&type=uint8`;
-
   const res = await fetch(url, {
     method: "GET",
-    headers: AQN_API_KEY ? { "x-api-key": AQN_API_KEY } : {},
+    headers: { "x-api-key": AQN_API_KEY },
     cache: "no-store",
   });
-
   if (!res.ok) throw new Error(`AQN HTTP ${res.status}`);
   const data = await res.json();
   if (!data?.data || data.data.length !== n) throw new Error("AQN bad response");
   return data.data;
 }
 
+function fetchCrypto(n) {
+  const buf = new Uint8Array(n);
+  crypto.getRandomValues(buf);
+  return Array.from(buf);
+}
 
-    async function quantumShuffle(arr) {
-      const rand = await fetchQuantumRandom(arr.length);
-      return arr.map((v, i) => ({v, r: rand[i]})).sort((a, b) => a.r - b.r).map(o => o.v);
-    }
+async function fetchRandom(n) {
+  // Use quantum only if a key is set; otherwise use crypto immediately.
+  if (!AQN_API_KEY) return fetchCrypto(n);
+
+  try {
+    return await fetchAQN(n);
+  } catch (e) {
+    console.warn("AQN failed, using crypto RNG:", e);
+    return fetchCrypto(n);
+  }
+}
+
+async function quantumShuffle(arr) {
+  const rand = await fetchRandom(arr.length);
+  return arr
+    .map((v, i) => ({ v, r: rand[i] }))
+    .sort((a, b) => a.r - b.r)
+    .map((o) => o.v);
+}
 
     /* --------------- DECK BUILD --------------- */
     function buildDeck() {
@@ -131,21 +149,19 @@ async function fetchQuantumRandom(n) {
 
     /* --------------- INITIALISE --------------- */
     (async function init() {
-      try {
-        status('Shuffling with quantum randomness...');
-        deck = await quantumShuffle(buildDeck());
-      } catch (err) {
-        alert('Quantum RNG unavailable. Reload to try again.');
-        console.error(err);
-        return;
-      }
-      playerHand = deck.splice(0, 7);
-      aiHand = deck.splice(0, 7);
-      pile = [deck.pop()];
-      ({color: currentColor, value: currentValue} = pile[0]);
-      render();
-      status('Your turn!');
-    })();
+  status("Shuffling...");
+  deck = await quantumShuffle(buildDeck());
+
+  playerHand = deck.splice(0, 7);
+  aiHand = deck.splice(0, 7);
+  pile = [deck.pop()];
+  ({ color: currentColor, value: currentValue } = pile[0]);
+
+  render();
+
+  if (AQN_API_KEY) status("Shuffled with quantum randomness. Your turn!");
+  else status("Shuffled with secure randomness. (Add AQN key for quantum) Your turn!");
+})();
 
     /* ----------------- RENDER ----------------- */
     function getCardDisplayValue(val) {
@@ -274,4 +290,5 @@ async function fetchQuantumRandom(n) {
   </script>
 </body>
 </html>
+
 
