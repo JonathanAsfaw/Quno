@@ -1,7 +1,7 @@
 # Quno!
 
 Quno is a digital version of the classic card game UNO — with a twist. Every game is shuffled using **true quantum randomness**, not just pseudorandom functions. This makes Quno the first online UNO-style game to use actual quantum mechanics to influence gameplay.
-
+Play it Here: https://jonathanasfaw.github.io/Quno/
 ---
 
 ## 🔍 What is This?
