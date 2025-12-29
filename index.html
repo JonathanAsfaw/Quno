@@ -90,12 +90,24 @@
     let skipNext = false, pendingDraw = 0;
 
     /* ---------------- QRNG ---------------- */
-    async function fetchQuantumRandom(n) {
-      const res = await fetch(`https://qrng.anu.edu.au/API/jsonI.php?length=${n}&type=uint8`);
-      const data = await res.json();
-      if(!data || !data.data || data.data.length !== n) throw new Error('QRNG failed');
-      return data.data;
-    }
+    const AQN_URL = "https://api.quantumnumbers.anu.edu.au";
+const AQN_API_KEY = ""; // put your key here (see note below)
+
+async function fetchQuantumRandom(n) {
+  const url = `${AQN_URL}?length=${n}&type=uint8`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: AQN_API_KEY ? { "x-api-key": AQN_API_KEY } : {},
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(`AQN HTTP ${res.status}`);
+  const data = await res.json();
+  if (!data?.data || data.data.length !== n) throw new Error("AQN bad response");
+  return data.data;
+}
+
 
     async function quantumShuffle(arr) {
       const rand = await fetchQuantumRandom(arr.length);
@@ -262,3 +274,4 @@
   </script>
 </body>
 </html>
+
